@@ -3,13 +3,13 @@
 
 CREATE TABLE user (
     id string NOT NULL UNIQUE PRIMARY KEY,
-    email string NOT NULL UNIQUE,
+    username string NOT NULL UNIQUE,
     password string NOT NULL
 );
 
 CREATE TABLE todo_item (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  user_id string REFERENCES user(id),
+  user_id string REFERENCES user(id) ON DELETE CASCADE,
   completed INTEGER NOT NULL,
   text string NOT NULL,
   created DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
