@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	pw := "secret"
+	pw := "password"
 	hash, _ := password.HashPassword(pw, 14) // ignore error for the sake of simplicity
 
 	fmt.Println("Password:", pw)
