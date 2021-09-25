@@ -2,9 +2,9 @@
 -- +migrate Up
 INSERT INTO user (id, username, password)
 VALUES
-    ('ad2a2d', 'user1', '$2a$14$JJhy4G7Tlm0GtVXCoFElEeqmDkXgTQfsP7hxwcGzVAkZv67wrIKGe'),
-    ('bsr5s5', 'user2', '$2a$14$O.zjBprfO.NxgCJovBS8JuZqekgyh.VwrZhkPF73b47QXQ.H0Lf9a'),
-    ('z4t434', 'user3', '$2a$14$O.zjBprfO.NxgCJovBS8JuZqekgyh.VwrZhkPF73b47QXQ.H0Lf9a');
+    ('ad2a2d', 'user1', '$2a$14$v3pBPjTnFnkOwCvxDoGVQ.EwKc9A9NG9cUc4O0j3lwhi4WEg2wmVW'),
+    ('bsr5s5', 'user2', '$2a$14$0kChyxsiqxp8O5jW4Tztvex/Pf3FehS9A0Y7KfWKExik4mvNfyBsm'),
+    ('z4t434', 'user3', '$2a$14$xRmDmHKZ.JHfXAvG1m8Xq.4UjxW/zG7H6uEOrilyQQxaT0VK/lXCG');
 
 INSERT INTO todo_item (user_id, completed, text, due, category)
 VALUES
