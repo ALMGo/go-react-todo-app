@@ -7,6 +7,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/jmoiron/sqlx"
 	"github.com/almaclaine/gopkgs/password"
+    "github.com/Masterminds/squirrel"
 )
 
 type User struct {
@@ -34,7 +35,8 @@ func main() {
 	}
 
 	people := []User{}
-	db.Select(&people, "SELECT * FROM user")
+	sql, _, err := squirrel.Select("*").From("user").ToSql()
+	db.Select(&people, sql)
 	jane, jason := people[0], people[1]
 
 	fmt.Println(password.CheckPasswordHash("secret", jane.Password))
