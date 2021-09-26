@@ -17,6 +17,12 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	err = CreateUser(db, "user4", "secret")
+
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
 	person, err := GetUserById(db, "ad2a2d")
 
 	if err != nil {
