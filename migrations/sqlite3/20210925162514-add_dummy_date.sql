@@ -1,5 +1,7 @@
 
 -- +migrate Up
+
+-- Password is secret for each user
 INSERT INTO user (id, username, password)
 VALUES
     ('ad2a2d', 'user1', '$2a$14$v3pBPjTnFnkOwCvxDoGVQ.EwKc9A9NG9cUc4O0j3lwhi4WEg2wmVW'),
