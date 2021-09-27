@@ -2,14 +2,14 @@
 -- +migrate Up
 
 CREATE TABLE user (
-    id string NOT NULL UNIQUE PRIMARY KEY,
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     username string NOT NULL UNIQUE,
     password string NOT NULL
 );
 
 CREATE TABLE todo_item (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  user_id string REFERENCES user(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES user(id) ON DELETE CASCADE,
   completed INTEGER NOT NULL,
   text string NOT NULL,
   created DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -3,15 +3,17 @@ package main
 import (
 	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
-	"github.com/almaclaine/gopkgs/randstring"
 	"github.com/jmoiron/sqlx"
+	"strconv"
 )
 
-func GetUser(conn *sqlx.DB, param string, username string) (User, error) {
+// User Controllers
+
+func GetUser(conn *sqlx.DB, param string, val string) (User, error) {
 	var user []User
 	sql, args, err := squirrel.Select("*").
 		From("user").
-		Where(squirrel.Eq{param: username}).
+		Where(squirrel.Eq{param: val}).
 		ToSql()
 
 	if err != nil {
@@ -30,23 +32,20 @@ func GetUserByUsername(conn *sqlx.DB, username string) (User, error) {
 	return GetUser(conn, "username", username)
 }
 
-func GetUserById(conn *sqlx.DB, id string) (User, error) {
-	return GetUser(conn, "id", id)
+func GetUserById(conn *sqlx.DB, id int) (User, error) {
+	return GetUser(conn, "id", string(id))
 }
 
-func CreateUser(conn *sqlx.DB, username string, pass string) error {
-	encPass, err := password.HashPassword(pass, 14)
+func CreateUser(conn *sqlx.DB, user User) error {
+	encPass, err := password.HashPassword(user.Password, 14)
 
 	if err != nil {
 		return err
 	}
 
-	id := randstring.RandomStringWithCharset(1, randstring.LettersCharset) +
-		randstring.RandomString(15)
-
 	sql, args, err := squirrel.Insert("user").
-		Columns("id", "username", "password").
-		Values(id, username, encPass).
+		Columns("username", "password").
+		Values(user.Username, encPass).
 		ToSql()
 
 	if err != nil {
@@ -55,4 +54,69 @@ func CreateUser(conn *sqlx.DB, username string, pass string) error {
 
 	_, err = conn.Exec(sql, args...)
 	return err
+}
+
+func DeleteUser(conn *sqlx.DB, id int) error {
+	sql, args, err := squirrel.Delete("user").
+		Where(squirrel.Eq{"id": id}).ToSql()
+
+	_, err = conn.Exec(sql, args...)
+	return err
+}
+
+// TodoItem Controllers
+
+func GetTodoItems(conn *sqlx.DB, param string, val string, size uint64, page uint64) ([]TodoItem, error) {
+	var todos []TodoItem
+	sql, args, err := squirrel.Select("*").
+		From("todo_item").
+		Where(squirrel.Eq{param: val}).
+		//Offset(page * size).
+		//Limit(size).
+		ToSql()
+
+	if err != nil {
+		return []TodoItem{}, err
+	}
+
+	err = conn.Select(&todos, sql, args[0])
+	if err != nil {
+		return []TodoItem{}, err
+	}
+
+	return todos, nil
+}
+
+func GetTodoItemById(conn *sqlx.DB, id int) (TodoItem, error) {
+	todos, err := GetTodoItems(conn, "id", strconv.Itoa(id), 1, 0)
+	if err != nil {
+		return TodoItem{}, err
+	}
+
+	return todos[0], nil
+}
+
+func GetTodoItemsByUserId(conn *sqlx.DB, userId int, size uint64, page uint64) ([]TodoItem, error) {
+	return GetTodoItems(conn, "user_id", strconv.Itoa(userId), size, page)
+}
+
+func GetTodoItemsByUserIdAndCategory(conn *sqlx.DB, userId string, category string, size uint64, page uint64) ([]TodoItem, error) {
+	var todos []TodoItem
+	sql, args, err := squirrel.Select("*").
+		From("todo_item").
+		Where(squirrel.And{squirrel.Eq{"user_id": userId}, squirrel.Eq{"category": category}}).
+		Offset(page * size).
+		Limit(size).
+		ToSql()
+
+	if err != nil {
+		return []TodoItem{}, err
+	}
+
+	err = conn.Select(&todos, sql, args[0])
+	if err != nil {
+		return []TodoItem{}, err
+	}
+
+	return todos, nil
 }
