@@ -7,11 +7,11 @@ type User struct {
 }
 
 type TodoItem struct {
-	Id        int    `db:"id"`
-	UserId    int    `db:"user_id"`
-	Completed bool   `db:"completed"`
-	Text      string `db:"text"`
-	Created   string `db:"created"`
-	Due       string `db:"due"`
-	Category  string `db:"category"`
+	Id        int    `db:"id" json:"id"`
+	UserId    int    `db:"user_id" json:"userId"`
+	Completed bool   `db:"completed" json:"completed"`
+	Text      string `db:"text" json:"text"`
+	Created   string `db:"created" json:"created"`
+	Due       string `db:"due" json:"created"`
+	Category  string `db:"category" json:"category"`
 }

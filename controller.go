@@ -4,7 +4,6 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
 	"github.com/jmoiron/sqlx"
-	"strconv"
 )
 
 // User Controllers
@@ -87,8 +86,8 @@ func GetTodoItems(conn *sqlx.DB, param string, val string, size uint64, page uin
 	return todos, nil
 }
 
-func GetTodoItemById(conn *sqlx.DB, id int) (TodoItem, error) {
-	todos, err := GetTodoItems(conn, "id", strconv.Itoa(id), 1, 0)
+func GetTodoItemById(conn *sqlx.DB, id string) (TodoItem, error) {
+	todos, err := GetTodoItems(conn, "id", id, 1, 0)
 	if err != nil {
 		return TodoItem{}, err
 	}

@@ -4,17 +4,21 @@ import (
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
-	"github.com/jmoiron/sqlx"
-	"log"
-	"os"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
+	"log"
+	"os"
 )
 
 var logger *zap.Logger
+
+type Error struct {
+	Error string `json:"error"`
+	Id string `json:"id"`
+}
 
 func main() {
 	db, err := sqlx.Connect("sqlite3", "test.db")
@@ -32,10 +36,11 @@ func main() {
 		err := CreateUser(db, user)
 		if err != nil {
 			errorId := genErrorId()
-			logger.Error("Error Creating User",
+			msg := "Error Creating User"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		} else {
 			logger.Info("Successfully Created User",
@@ -51,11 +56,12 @@ func main() {
 
 		if err != nil {
 			errorId := genErrorId()
-			logger.Error("Error Getting User",
+			msg := "Error Getting User"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.String("username", user.Username),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		}
 
@@ -63,20 +69,22 @@ func main() {
 
 		if err != nil {
 			errorId := genErrorId()
-			logger.Error("Error Checking Password",
+			msg := "Error Checking Password"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		}
 
 		if !match {
 			errorId := genErrorId()
-			logger.Error("Invalid Password",
+			msg := "Invalid Password"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.String("username", user.Username),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		}
 
@@ -84,10 +92,11 @@ func main() {
 		defer sess.Save()
 		if err != nil {
 			errorId := genErrorId()
-			logger.Error("Failed To Get Session",
+			msg := "Failed To Get Session"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		}
 
@@ -99,12 +108,14 @@ func main() {
 
 	app.Get("/todos/", func(c *fiber.Ctx) error {
 		sess, err := store.Get(c)
+		defer sess.Save()
 		if err != nil {
 			errorId := genErrorId()
-			logger.Error("Failed To Get Session",
+			msg := "Failed To Get Session"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(500)
 		}
 
@@ -167,27 +178,89 @@ func main() {
 
 			if err != nil {
 				errorId := genErrorId()
-				logger.Error("Error Grabbing Todos",
+				msg := "Error Grabbing Todos"
+				logger.Error(msg,
 					zap.String("ErrorId", errorId),
 					zap.Int("userId", id),
 					zap.Error(err))
-				c.SendString("Error Id: " + errorId)
+				c.JSON(Error{Id: errorId, Error: msg })
 				return c.SendStatus(500)
 			}
-			fmt.Println(todos)
 			if todos == nil {
 				return c.JSON(make([]string, 0))
 			}
 			return c.JSON(todos) // => ✋ register
 		} else {
 			errorId := genErrorId()
-			logger.Error("User is not signed in",
+			msg := "User is not signed in"
+			logger.Error(msg,
 				zap.String("ErrorId", errorId),
 				zap.Error(err))
-			c.SendString("Error Id: " + errorId)
+			c.JSON(Error{Id: errorId, Error: msg })
 			return c.SendStatus(403)
 		}
 	})
+
+	app.Get("/todo/:id", func(c *fiber.Ctx) error {
+		sess, err := store.Get(c)
+		defer sess.Save()
+		userId := sess.Get("user_id")
+
+		if userIdNumber, ok := userId.(int); ok {
+			id := c.Params("id")
+			if id == "" {
+				errorId := genErrorId()
+				msg := "No id passed to /todo/:id"
+				logger.Error(msg,
+					zap.String("ErrorId", errorId),
+					zap.Int("userId", userIdNumber),
+					zap.Error(err))
+				c.JSON(Error{Id: errorId, Error: msg })
+				return c.SendStatus(404)
+			}
+
+			todo, err := GetTodoItemById(db, id)
+
+			if err != nil {
+				errorId := genErrorId()
+				msg := "Failed to get todo Item"
+				logger.Error(msg,
+					zap.String("ErrorId", errorId),
+					zap.Int("userId", userIdNumber),
+					zap.String("todoID", id),
+					zap.Error(err))
+				c.JSON(Error{Id: errorId, Error: msg })
+				return c.SendStatus(500)
+			}
+
+			if todo.UserId != userIdNumber {
+				errorId := genErrorId()
+				msg := "User unauthorized todo access"
+				logger.Error(msg,
+					zap.String("ErrorId", errorId),
+					zap.Int("userId", userIdNumber),
+					zap.String("todoID", id),
+					zap.Error(err))
+				err := Error{
+					Id: errorId,
+					Error: msg,
+				}
+				c.JSON(err)
+				return c.SendStatus(403)
+			}
+
+			return c.JSON(todo)
+		}  else {
+			errorId := genErrorId()
+			msg := "User is not signed in"
+			logger.Error(msg,
+				zap.String("ErrorId", errorId),
+				zap.Error(err))
+			c.JSON(Error{Id: errorId, Error: msg })
+			return c.SendStatus(403)
+		}
+	})
+
 
 	log.Fatal(app.Listen(":3000"))
 }
