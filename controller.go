@@ -95,28 +95,3 @@ func GetTodoItemById(conn *sqlx.DB, id int) (TodoItem, error) {
 
 	return todos[0], nil
 }
-
-func GetTodoItemsByUserId(conn *sqlx.DB, userId int, size uint64, page uint64) ([]TodoItem, error) {
-	return GetTodoItems(conn, "user_id", strconv.Itoa(userId), size, page)
-}
-
-func GetTodoItemsByUserIdAndCategory(conn *sqlx.DB, userId string, category string, size uint64, page uint64) ([]TodoItem, error) {
-	var todos []TodoItem
-	sql, args, err := squirrel.Select("*").
-		From("todo_item").
-		Where(squirrel.And{squirrel.Eq{"user_id": userId}, squirrel.Eq{"category": category}}).
-		Offset(page * size).
-		Limit(size).
-		ToSql()
-
-	if err != nil {
-		return []TodoItem{}, err
-	}
-
-	err = conn.Select(&todos, sql, args[0])
-	if err != nil {
-		return []TodoItem{}, err
-	}
-
-	return todos, nil
-}
