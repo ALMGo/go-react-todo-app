@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
 	"github.com/jmoiron/sqlx"
 	"log"
@@ -109,7 +110,61 @@ func main() {
 
 		userId := sess.Get("user_id")
 		if id, ok := userId.(int); ok {
-			todos, err := GetTodoItemsByUserId(db, id, 10, 1)
+			//todos, err := GetTodoItemsByUserId(db, id, 10, 1)
+			var todos []TodoItem
+			selectBuilder := squirrel.Select("*").
+				From("todo_item").
+				Where(squirrel.Eq{"user_id": userId})
+
+			completed := c.Query("completed")
+			if completed != "" {
+				if completed == "true" {
+					selectBuilder = selectBuilder.Where(squirrel.Eq{"completed": 1})
+				} else if completed == "false" {
+					selectBuilder = selectBuilder.Where(squirrel.Eq{"completed": 0})
+				}
+			}
+
+			category := c.Query("category")
+			if category != "" {
+				selectBuilder = selectBuilder.Where("category LIKE '%" + category + "%'")
+			}
+
+			text := c.Query("text")
+			if text != "" {
+				selectBuilder = selectBuilder.Where("text LIKE '%" + text + "%'")
+			}
+
+			createdBefore := c.Query("createdBefore")
+			createdAfter := c.Query("createdAfter")
+			if createdBefore != "" && createdAfter != "" {
+				selectBuilder = selectBuilder.Where(squirrel.And{
+						squirrel.Lt{"created": createdBefore},
+						squirrel.Gt{"created": createdAfter},
+					})
+			} else if createdBefore != "" {
+				selectBuilder = selectBuilder.Where(squirrel.Lt{"created": createdBefore})
+			} else if createdAfter != "" {
+				selectBuilder = selectBuilder.Where(squirrel.Gt{"created": createdAfter})
+			}
+
+			dueBefore := c.Query("dueBefore")
+			dueAfter := c.Query("dueAfter")
+			if dueBefore != "" && dueAfter != "" {
+				selectBuilder = selectBuilder.Where(squirrel.And{
+						squirrel.Lt{"due": dueBefore},
+						squirrel.Gt{"due": dueAfter},
+					})
+			} else if dueBefore != "" {
+				selectBuilder = selectBuilder.Where(squirrel.Lt{"due": dueBefore})
+			} else if dueAfter != "" {
+				selectBuilder = selectBuilder.Where(squirrel.Gt{"due": dueAfter})
+			}
+
+			sql, args, err := selectBuilder.ToSql()
+
+			err = db.Select(&todos, sql, args...)
+
 			if err != nil {
 				errorId := genErrorId()
 				logger.Error("Error Grabbing Todos",
@@ -120,6 +175,9 @@ func main() {
 				return c.SendStatus(500)
 			}
 			fmt.Println(todos)
+			if todos == nil {
+				return c.JSON(make([]string, 0))
+			}
 			return c.JSON(todos) // => ✋ register
 		} else {
 			errorId := genErrorId()
