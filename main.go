@@ -11,38 +11,14 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"os"
-	"strconv"
 )
 
 var logger *zap.Logger
 
-type Error struct {
-	Error string `json:"error"`
-	Id string `json:"id"`
-}
-
-type errObj struct {
-	msg string
-	err *error
-	status int
-}
-
-func handleError(c *fiber.Ctx, errObj errObj, fields *[]zap.Field) error {
-	errorId := genErrorId()
-	errors := append(append(
-		[]zap.Field{zap.String("ErrorId", errorId)},
-		*fields...), zap.Error(*errObj.err))
-	logger.Error(errObj.msg, errors...)
-	c.JSON(Error{Id: errorId, Error: errObj.msg })
-	return c.SendStatus(errObj.status)
-}
-
-func failSession(c *fiber.Ctx, err *error) error {
-	return handleError(c, errObj{
-		msg: "Failed To Get Session",
-		err: err,
-		status: 500,
-	}, &[]zap.Field{})
+func handleSuccess(c *fiber.Ctx) error {
+	return c.JSON(&Message{
+		message: "success",
+	})
 }
 
 func main() {
@@ -51,7 +27,7 @@ func main() {
 	logger, _ = zap.NewProduction()
 
 	if err != nil {
-		fmt.Println(err)
+		logger.Info("error Connecting To Database")
 		os.Exit(1)
 	}
 
@@ -61,16 +37,13 @@ func main() {
 		c.BodyParser(&user)
 		err := CreateUser(db, user)
 		if err != nil {
-			return handleError(c, errObj{
-				msg: "Error Creating User",
-				err: &err,
-				status: 500,
-			}, &[]zap.Field{})
+			return creatingUserError(c, &err)
 		} else {
 			logger.Info("Successfully Created User",
 				zap.String("Username", user.Username))
 		}
-		return c.SendString("Success")
+
+		return handleSuccess(c)
 	})
 
 	app.Post("/user/login", func(c *fiber.Ctx) error {
@@ -79,29 +52,17 @@ func main() {
 		dbUser, err := GetUserByUsername(db, user.Username)
 
 		if err != nil {
-			return handleError(c, errObj{
-				msg: "Error Getting User",
-				err: &err,
-				status: 500,
-			}, &[]zap.Field{zap.String("username", user.Username)})
+			return gettingUserError(c, &err, user.Username)
 		}
 
 		match, err := password.CheckPasswordHash(user.Password, dbUser.Password)
 
 		if err != nil {
-			return handleError(c, errObj{
-				msg: "Error Checking Password",
-				err: &err,
-				status: 500,
-			}, &[]zap.Field{})
+			return checkingPasswordError(c, &err, dbUser.Id)
 		}
 
 		if !match {
-			return handleError(c, errObj{
-				msg: "Invalid Password",
-				err: &err,
-				status: 403,
-			}, &[]zap.Field{zap.String("username", user.Username)})
+			return invalidPasswordError(c, dbUser.Id)
 		}
 
 		sess, err := store.Get(c)
@@ -111,9 +72,9 @@ func main() {
 		}
 
 		sess.Set("user_id", dbUser.Id)
-		logger.Info("User Logged In",
-			zap.String("Username", dbUser.Username))
-		return c.SendString("Success")
+		logger.Info("user Logged In",
+			zap.String("username", dbUser.Username))
+		return handleSuccess(c)
 	})
 
 	app.Get("/todos/", func(c *fiber.Ctx) error {
@@ -128,7 +89,7 @@ func main() {
 			var todos []TodoItem
 			selectBuilder := squirrel.Select("*").
 				From("todo_item").
-				Where(squirrel.Eq{"user_id": userId})
+				Where(squirrel.Eq{"user_id": id})
 
 			completed := c.Query("completed")
 			if completed != "" {
@@ -180,22 +141,14 @@ func main() {
 			err = db.Select(&todos, sql, args...)
 
 			if err != nil {
-				return handleError(c, errObj{
-					msg: "Invalid Password",
-					err: &err,
-					status: 500,
-				}, &[]zap.Field{zap.Int("userId", id)})
+				return gettingTodoItemsError(c, &err, id, sql)
 			}
 			if todos == nil {
 				return c.JSON(make([]string, 0))
 			}
 			return c.JSON(todos) // => ✋ register
 		} else {
-			return handleError(c, errObj{
-				msg: "User is not signed in",
-				err: &err,
-				status: 403,
-			}, &[]zap.Field{zap.Int("userId", id)})
+			return userNotSignedInError(c)
 		}
 	})
 
@@ -210,43 +163,21 @@ func main() {
 		if userIdNumber, ok := userId.(int); ok {
 			id := c.Params("id")
 			if id == "" {
-				return handleError(c, errObj{
-					msg: "No id passed to /todo/:id",
-					err: &err,
-					status: 403,
-				}, &[]zap.Field{zap.Int("userId", userIdNumber)})
+				return noIdTodoError(c, &err, id)
 			}
 
 			todo, err := GetTodoItemById(db, id)
 
 			if err != nil {
-				return handleError(c, errObj{
-					msg: "User is not signed in",
-					err: &err,
-					status: 500,
-				}, &[]zap.Field{
-					zap.Int("userId", userIdNumber),
-					zap.String("todoID", id),
-				})
+				return gettingTodoItemError(c, &err, userIdNumber, id)
 			}
 
 			if todo.UserId != userIdNumber {
-				return handleError(c, errObj{
-					msg: "User unauthorized todo access",
-					err: &err,
-					status: 403,
-				}, &[]zap.Field{
-					zap.Int("userId", userIdNumber),
-					zap.String("todoID", id),
-				})
+				return itemUserUnauthorized(c, userIdNumber, id)
 			}
 			return c.JSON(todo)
 		}  else {
-			return handleError(c, errObj{
-				msg: "User is not signed in",
-				err: &err,
-				status: 403,
-			}, &[]zap.Field{})
+			return userNotSignedInError(c)
 		}
 	})
 
@@ -262,25 +193,92 @@ func main() {
 			var todo TodoItem
 			c.BodyParser(&todo)
 
-			err := CreateTodoItem(db, userIdNumber, todo.Text, todo.Due, todo.Category)
+			id, err := CreateTodoItem(db, userIdNumber, todo.Text, todo.Due, todo.Category)
 
 			if err != nil {
 				return handleError(c, errObj{
-					msg: "Error Creating TodoItem",
+					msg: "error Creating TodoItem",
 					err: &err,
 					status: 500,
 				}, &[]zap.Field{})
 			} else {
 				logger.Info("Successfully Created Todo Item",
-					zap.String("user_id", strconv.Itoa(userIdNumber)))
+					zap.Int("user_id", userIdNumber),
+						zap.Int64("todo_id", id))
 			}
 		}  else {
-			return handleError(c, errObj{
-				msg: "User is not signed in",
-				err: &err,
-				status: 403,
-			}, &[]zap.Field{})
+			return userNotSignedInError(c)
 		}
+
+		return handleSuccess(c)
+	})
+
+	app.Patch("/todo/:id", func(c *fiber.Ctx) error {
+		sess, err := store.Get(c)
+		defer sess.Save()
+		if err != nil {
+			return failSession(c, &err)
+		}
+
+		userId := sess.Get("user_id")
+		if userIdNumber, ok := userId.(int); ok {
+			var todo TodoItemPost
+			c.BodyParser(&todo)
+
+			fmt.Println(todo)
+
+			id := c.Params("id")
+			if id == "" {
+				return handleError(c, errObj{
+					msg: "no id passed to /todo/:id",
+					err: &err,
+					status: 403,
+				}, &[]zap.Field{zap.Int("userId", userIdNumber)})
+			}
+
+			todoItem, err := GetTodoItemById(db, id)
+
+			if err != nil {
+				return handleError(c, errObj{
+					msg: "error Getting Todo Item",
+					err: &err,
+					status: 500,
+				}, &[]zap.Field{
+					zap.Int("userId", userIdNumber),
+					zap.String("todoID", id),
+				})
+			}
+
+			if todoItem.UserId != userIdNumber {
+				return handleError(c, errObj{
+					msg: "user unauthorized todo access",
+					err: &err,
+					status: 403,
+				}, &[]zap.Field{
+					zap.Int("userId", userIdNumber),
+					zap.String("todoID", id),
+				})
+			}
+
+			//updateBuilder := squirrel.Update("todo_item").
+			//	Where(squirrel.Eq{"id": id})
+
+			if err != nil {
+				return handleError(c, errObj{
+					msg: "error Creating TodoItem",
+					err: &err,
+					status: 500,
+				}, &[]zap.Field{})
+			} else {
+				logger.Info("successfully Created Todo Item",
+					zap.Int("user_id", userIdNumber),
+					zap.String("todo_id", id))
+			}
+		} else {
+			return userNotSignedInError(c)
+		}
+
+		return handleSuccess(c)
 	})
 
 	log.Fatal(app.Listen(":3000"))

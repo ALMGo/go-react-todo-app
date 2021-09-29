@@ -15,3 +15,25 @@ type TodoItem struct {
 	Due       string `db:"due" json:"created"`
 	Category  string `db:"category" json:"category"`
 }
+
+type Error struct {
+	Error string `json:"error"`
+	Id string `json:"id"`
+}
+
+type errObj struct {
+	msg string
+	err *error
+	status int
+}
+
+type TodoItemPost struct {
+	Completed string
+	Text      string
+	Due       string
+	Category  string
+}
+
+type Message struct {
+	message string
+}

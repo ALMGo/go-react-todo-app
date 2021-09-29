@@ -85,7 +85,7 @@ func GetTodoItems(conn *sqlx.DB, param string, val string) ([]TodoItem, error) {
 }
 
 func GetTodoItemById(conn *sqlx.DB, id string) (TodoItem, error) {
-	var todo TodoItem
+	var todo []TodoItem
 	sql, args, err := squirrel.Select("*").
 		From("todo_item").
 		Where(squirrel.Eq{"id": id}).
@@ -100,19 +100,27 @@ func GetTodoItemById(conn *sqlx.DB, id string) (TodoItem, error) {
 		return TodoItem{}, err
 	}
 
-	return todo, nil
+	return todo[0], nil
 }
 
-func CreateTodoItem(conn *sqlx.DB, userId int, text string, due string, category string) error {
+func CreateTodoItem(conn *sqlx.DB, userId int, text string, due string, category string) (int64, error) {
 	sql, args, err := squirrel.Insert("todo_item").
 		Columns("user_id", "text", "string", "category").
 		Values(userId, text, due, category).
 		ToSql()
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = conn.Exec(sql, args...)
-	return err
+	res, err := conn.Exec(sql, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
