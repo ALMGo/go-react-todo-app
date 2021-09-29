@@ -52,7 +52,7 @@ func gettingUserError(c *fiber.Ctx, err *error, username string) error {
 		msg: "error getting user",
 		err: err,
 		status: 500,
-	}, &[]zap.Field{zap.String("username", uusername)})
+	}, &[]zap.Field{zap.String("username", username)})
 }
 
 // Password Errors
