@@ -65,13 +65,11 @@ func DeleteUser(conn *sqlx.DB, id int) error {
 
 // TodoItem Controllers
 
-func GetTodoItems(conn *sqlx.DB, param string, val string, size uint64, page uint64) ([]TodoItem, error) {
+func GetTodoItems(conn *sqlx.DB, param string, val string) ([]TodoItem, error) {
 	var todos []TodoItem
 	sql, args, err := squirrel.Select("*").
 		From("todo_item").
 		Where(squirrel.Eq{param: val}).
-		//Offset(page * size).
-		//Limit(size).
 		ToSql()
 
 	if err != nil {
@@ -87,10 +85,34 @@ func GetTodoItems(conn *sqlx.DB, param string, val string, size uint64, page uin
 }
 
 func GetTodoItemById(conn *sqlx.DB, id string) (TodoItem, error) {
-	todos, err := GetTodoItems(conn, "id", id, 1, 0)
+	var todo TodoItem
+	sql, args, err := squirrel.Select("*").
+		From("todo_item").
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+
 	if err != nil {
 		return TodoItem{}, err
 	}
 
-	return todos[0], nil
+	err = conn.Select(&todo, sql, args[0])
+	if err != nil {
+		return TodoItem{}, err
+	}
+
+	return todo, nil
+}
+
+func CreateTodoItem(conn *sqlx.DB, userId int, text string, due string, category string) error {
+	sql, args, err := squirrel.Insert("todo_item").
+		Columns("user_id", "text", "string", "category").
+		Values(userId, text, due, category).
+		ToSql()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(sql, args...)
+	return err
 }

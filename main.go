@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"os"
+	"strconv"
 )
 
 var logger *zap.Logger
@@ -53,6 +54,7 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	app := fiber.New()
 	app.Post("/user/register", func(c *fiber.Ctx) error {
 		var user User
@@ -123,7 +125,6 @@ func main() {
 
 		userId := sess.Get("user_id")
 		if id, ok := userId.(int); ok {
-			//todos, err := GetTodoItemsByUserId(db, id, 10, 1)
 			var todos []TodoItem
 			selectBuilder := squirrel.Select("*").
 				From("todo_item").
@@ -240,6 +241,39 @@ func main() {
 				})
 			}
 			return c.JSON(todo)
+		}  else {
+			return handleError(c, errObj{
+				msg: "User is not signed in",
+				err: &err,
+				status: 403,
+			}, &[]zap.Field{})
+		}
+	})
+
+	app.Post("/todo/", func(c *fiber.Ctx) error {
+		sess, err := store.Get(c)
+		defer sess.Save()
+		if err != nil {
+			return failSession(c, &err)
+		}
+
+		userId := sess.Get("user_id")
+		if userIdNumber, ok := userId.(int); ok {
+			var todo TodoItem
+			c.BodyParser(&todo)
+
+			err := CreateTodoItem(db, userIdNumber, todo.Text, todo.Due, todo.Category)
+
+			if err != nil {
+				return handleError(c, errObj{
+					msg: "Error Creating TodoItem",
+					err: &err,
+					status: 500,
+				}, &[]zap.Field{})
+			} else {
+				logger.Info("Successfully Created Todo Item",
+					zap.String("user_id", strconv.Itoa(userIdNumber)))
+			}
 		}  else {
 			return handleError(c, errObj{
 				msg: "User is not signed in",
