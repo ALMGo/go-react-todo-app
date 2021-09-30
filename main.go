@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +10,8 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"os"
+	"strings"
+	"time"
 )
 
 var logger *zap.Logger
@@ -37,7 +38,7 @@ func main() {
 		c.BodyParser(&user)
 		err := CreateUser(db, user)
 		if err != nil {
-			return creatingUserError(c, &err)
+			return createUserError(c, &err)
 		} else {
 			logger.Info("Successfully Created User",
 				zap.String("Username", user.Username))
@@ -52,7 +53,7 @@ func main() {
 		dbUser, err := GetUserByUsername(db, user.Username)
 
 		if err != nil {
-			return gettingUserError(c, &err, user.Username)
+			return getUserError(c, &err, user.Username)
 		}
 
 		match, err := password.CheckPasswordHash(user.Password, dbUser.Password)
@@ -62,7 +63,7 @@ func main() {
 		}
 
 		if !match {
-			return invalidPasswordError(c, dbUser.Id)
+			return passwordMatchError(c, dbUser.Id)
 		}
 
 		sess, err := store.Get(c)
@@ -77,6 +78,27 @@ func main() {
 		return handleSuccess(c)
 	})
 
+	app.Delete("/user/", func(c *fiber.Ctx) error {
+		sess, err := store.Get(c)
+		defer sess.Save()
+		if err != nil {
+			return failSession(c, &err)
+		}
+
+		userId := sess.Get("user_id")
+		if userIdNumber, ok := userId.(int); ok {
+			err := DeleteUser(db, userIdNumber)
+
+			if err != nil {
+				return deleteUserError(c, &err)
+			}
+
+			return handleSuccess(c)
+		}  else {
+			return userNotSignedInError(c)
+		}
+	})
+
 	app.Get("/todos/", func(c *fiber.Ctx) error {
 		sess, err := store.Get(c)
 		defer sess.Save()
@@ -85,11 +107,11 @@ func main() {
 		}
 
 		userId := sess.Get("user_id")
-		if id, ok := userId.(int); ok {
+		if userIdNumber, ok := userId.(int); ok {
 			var todos []TodoItem
 			selectBuilder := squirrel.Select("*").
 				From("todo_item").
-				Where(squirrel.Eq{"user_id": id})
+				Where(squirrel.Eq{"user_id": userIdNumber})
 
 			completed := c.Query("completed")
 			if completed != "" {
@@ -138,10 +160,14 @@ func main() {
 
 			sql, args, err := selectBuilder.ToSql()
 
+			if err != nil {
+				return buildingSqlError(c, &err, userIdNumber, sql)
+			}
+
 			err = db.Select(&todos, sql, args...)
 
 			if err != nil {
-				return gettingTodoItemsError(c, &err, id, sql)
+				return getTodoItemsError(c, &err, userIdNumber, sql)
 			}
 			if todos == nil {
 				return c.JSON(make([]string, 0))
@@ -169,7 +195,7 @@ func main() {
 			todo, err := GetTodoItemById(db, id)
 
 			if err != nil {
-				return gettingTodoItemError(c, &err, userIdNumber, id)
+				return getTodoItemError(c, &err, userIdNumber, id)
 			}
 
 			if todo.UserId != userIdNumber {
@@ -190,17 +216,18 @@ func main() {
 
 		userId := sess.Get("user_id")
 		if userIdNumber, ok := userId.(int); ok {
-			var todo TodoItem
+			var todo TodoItemRequest
 			c.BodyParser(&todo)
 
-			id, err := CreateTodoItem(db, userIdNumber, todo.Text, todo.Due, todo.Category)
+			time, err := time.Parse(time.RFC3339, todo.Due)
+			if err != nil {
+				return invalidDateError(c, &err, userIdNumber, todo.Due)
+			}
+
+			id, err := CreateTodoItem(db, userIdNumber, todo.Text, time, todo.Category)
 
 			if err != nil {
-				return handleError(c, errObj{
-					msg: "error Creating TodoItem",
-					err: &err,
-					status: 500,
-				}, &[]zap.Field{})
+				return errorCreatingTodoItem(c, &err, userIdNumber)
 			} else {
 				logger.Info("Successfully Created Todo Item",
 					zap.Int("user_id", userIdNumber),
@@ -222,57 +249,65 @@ func main() {
 
 		userId := sess.Get("user_id")
 		if userIdNumber, ok := userId.(int); ok {
-			var todo TodoItemPost
+			var todo TodoItemRequest
 			c.BodyParser(&todo)
 
-			fmt.Println(todo)
-
-			id := c.Params("id")
-			if id == "" {
-				return handleError(c, errObj{
-					msg: "no id passed to /todo/:id",
-					err: &err,
-					status: 403,
-				}, &[]zap.Field{zap.Int("userId", userIdNumber)})
+			todoId := c.Params("id")
+			if todoId == "" {
+				return noIdTodoError(c, &err, todoId)
 			}
 
-			todoItem, err := GetTodoItemById(db, id)
+			todoItem, err := GetTodoItemById(db, todoId)
 
 			if err != nil {
-				return handleError(c, errObj{
-					msg: "error Getting Todo Item",
-					err: &err,
-					status: 500,
-				}, &[]zap.Field{
-					zap.Int("userId", userIdNumber),
-					zap.String("todoID", id),
-				})
+				return getTodoItemError(c, &err, userIdNumber, todoId)
 			}
 
 			if todoItem.UserId != userIdNumber {
-				return handleError(c, errObj{
-					msg: "user unauthorized todo access",
-					err: &err,
-					status: 403,
-				}, &[]zap.Field{
-					zap.Int("userId", userIdNumber),
-					zap.String("todoID", id),
-				})
+				return itemUserUnauthorized(c, userIdNumber, todoId)
 			}
 
-			//updateBuilder := squirrel.Update("todo_item").
-			//	Where(squirrel.Eq{"id": id})
+			updateBuilder := squirrel.Update("todo_item").
+				Where(squirrel.Eq{"id": todoId})
+
+			if todo.Due != "" {
+				t, err := time.Parse(time.RFC3339, todo.Due)
+				if err != nil {
+					return invalidDateError(c, &err, userIdNumber, todo.Due)
+				}
+				updateBuilder = updateBuilder.Set("due", t)
+			}
+
+			if todo.Text != "" {
+				updateBuilder = updateBuilder.Set("text", todo.Text)
+			}
+
+			if todo.Completed != "" {
+				if strings.ToLower(todo.Completed) == "true" {
+					updateBuilder = updateBuilder.Set("completed", true)
+				} else if strings.ToLower(todo.Completed) == "false" {
+					updateBuilder = updateBuilder.Set("completed", false)
+				}
+			}
+
+			if todo.Category != "" {
+				updateBuilder = updateBuilder.Set("category", todo.Category)
+			}
+
+			sql, args, err := updateBuilder.ToSql()
 
 			if err != nil {
-				return handleError(c, errObj{
-					msg: "error Creating TodoItem",
-					err: &err,
-					status: 500,
-				}, &[]zap.Field{})
+				return buildingSqlError(c, &err, userIdNumber, sql)
+			}
+
+			_, err = db.Exec(sql, args...)
+
+			if err != nil {
+				return patchTodoItemsError(c, &err, userIdNumber, sql)
 			} else {
 				logger.Info("successfully Created Todo Item",
 					zap.Int("user_id", userIdNumber),
-					zap.String("todo_id", id))
+					zap.String("todo_id", todoId))
 			}
 		} else {
 			return userNotSignedInError(c)

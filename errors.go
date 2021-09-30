@@ -29,9 +29,17 @@ func failSession(c *fiber.Ctx, err *error) error {
 
 // User Errors
 
-func creatingUserError(c *fiber.Ctx, err *error) error {
+func createUserError(c *fiber.Ctx, err *error) error {
 	return handleError(c, errObj{
-		msg: "error creating user",
+		msg: "creating user",
+		err: err,
+		status: 500,
+	}, &[]zap.Field{})
+}
+
+func deleteUserError(c *fiber.Ctx, err *error) error {
+	return handleError(c, errObj{
+		msg: "deleting user",
 		err: err,
 		status: 500,
 	}, &[]zap.Field{})
@@ -47,9 +55,9 @@ func userNotSignedInError(c *fiber.Ctx) error {
 	}, &[]zap.Field{})
 }
 
-func gettingUserError(c *fiber.Ctx, err *error, username string) error {
+func getUserError(c *fiber.Ctx, err *error, username string) error {
 	return handleError(c, errObj{
-		msg: "error getting user",
+		msg: "getting user",
 		err: err,
 		status: 500,
 	}, &[]zap.Field{zap.String("username", username)})
@@ -57,57 +65,68 @@ func gettingUserError(c *fiber.Ctx, err *error, username string) error {
 
 // Password Errors
 
-func checkingPasswordError(c *fiber.Ctx, err *error, id int) error {
+func checkingPasswordError(c *fiber.Ctx, err *error, userId int) error {
 	return handleError(c, errObj{
-		msg: "error checking password",
+		msg: "checking password",
 		err: err,
 		status: 500,
-	}, &[]zap.Field{zap.Int("user_id", id)})
+	}, &[]zap.Field{zap.Int("user_id", userId)})
 }
 
-func invalidPasswordError(c *fiber.Ctx, id int) error {
-	msg := "invalid password"
+func passwordMatchError(c *fiber.Ctx, userId int) error {
+	msg := "password doesn't match"
 	err := errors.New(msg)
 	return handleError(c, errObj{
 		msg: msg,
 		err: &err,
 		status: 403,
-	}, &[]zap.Field{zap.Int("user_id", id)})
+	}, &[]zap.Field{zap.Int("user_id", userId)})
 }
 
 // TodoItem Errors
 
-func gettingTodoItemsError(c *fiber.Ctx, err *error, id int, sql string) error {
+func getTodoItemsError(c *fiber.Ctx, err *error, userId int, sql string) error {
 	return handleError(c, errObj{
-		msg: "error getting todos",
+		msg: "getting todos",
 		err: err,
 		status: 500,
 	}, &[]zap.Field{
-		zap.Int("user_id", id),
+		zap.Int("user_id", userId),
 		zap.String("sql", sql),
 	})
 }
 
-func gettingTodoItemError(c *fiber.Ctx, err *error, id int, itemId string) error {
+func getTodoItemError(c *fiber.Ctx, err *error, userId int, itemId string) error {
 	return handleError(c, errObj{
-		msg: "error getting todo item",
+		msg: "getting todo item",
 		err: err,
 		status: 500,
 	}, &[]zap.Field{
-		zap.Int("user_id", id),
+		zap.Int("user_id", userId),
 		zap.String("todo_id", itemId),
 	})
 }
 
-func noIdTodoError(c *fiber.Ctx, err *error, id int) error {
+func patchTodoItemsError(c *fiber.Ctx, err *error, userId int, sql string) error {
+	return handleError(c, errObj{
+		msg: "patching todo",
+		err: err,
+		status: 500,
+	}, &[]zap.Field{
+		zap.Int("user_id", userId),
+		zap.String("sql", sql),
+	})
+}
+
+func noIdTodoError(c *fiber.Ctx, err *error, userId string) error {
 	return handleError(c, errObj{
 		msg: "no id passed to /todo/:id",
 		err: err,
 		status: 403,
-	}, &[]zap.Field{zap.Int("user_id", id)})
+	}, &[]zap.Field{zap.String("user_id", userId)})
 }
 
-func itemUserUnauthorized(c *fiber.Ctx, id int, todoId string) error {
+func itemUserUnauthorized(c *fiber.Ctx, userId int, todoId string) error {
 	msg := "user unauthorized todo access"
 	err := errors.New(msg)
 	return handleError(c, errObj{
@@ -115,7 +134,39 @@ func itemUserUnauthorized(c *fiber.Ctx, id int, todoId string) error {
 		err: &err,
 		status: 403,
 	}, &[]zap.Field{
-		zap.Int("userId", id),
+		zap.Int("userId", userId),
 		zap.String("todoID", todoId),
+	})
+}
+
+func errorCreatingTodoItem(c *fiber.Ctx, err *error, userId int) error {
+	return handleError(c, errObj{
+		msg: "creating todo_item",
+		err: err,
+		status: 500,
+	}, &[]zap.Field{zap.Int("user_id", userId)})
+}
+
+func invalidDateError(c *fiber.Ctx, err *error, userId int, date string) error {
+	return handleError(c, errObj{
+		msg: "invalid date",
+		err: err,
+		status: 500,
+	}, &[]zap.Field{
+		zap.Int("user_id", userId),
+		zap.String("due", date),
+	})
+}
+
+// Sql
+
+func buildingSqlError(c *fiber.Ctx, err *error, userId int, sql string) error {
+	return handleError(c, errObj{
+		msg: "building sql",
+		err: err,
+		status: 500,
+	}, &[]zap.Field{
+		zap.Int("user_id", userId),
+		zap.String("sql", sql),
 	})
 }

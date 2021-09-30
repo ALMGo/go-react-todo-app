@@ -4,15 +4,16 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/almaclaine/gopkgs/password"
 	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 // User Controllers
 
-func GetUser(conn *sqlx.DB, param string, val string) (User, error) {
+func GetUserByUsername(conn *sqlx.DB, username string) (User, error) {
 	var user []User
 	sql, args, err := squirrel.Select("*").
 		From("user").
-		Where(squirrel.Eq{param: val}).
+		Where(squirrel.Eq{"username": username}).
 		ToSql()
 
 	if err != nil {
@@ -25,14 +26,6 @@ func GetUser(conn *sqlx.DB, param string, val string) (User, error) {
 	}
 
 	return user[0], nil
-}
-
-func GetUserByUsername(conn *sqlx.DB, username string) (User, error) {
-	return GetUser(conn, "username", username)
-}
-
-func GetUserById(conn *sqlx.DB, id int) (User, error) {
-	return GetUser(conn, "id", string(id))
 }
 
 func CreateUser(conn *sqlx.DB, user User) error {
@@ -103,7 +96,7 @@ func GetTodoItemById(conn *sqlx.DB, id string) (TodoItem, error) {
 	return todo[0], nil
 }
 
-func CreateTodoItem(conn *sqlx.DB, userId int, text string, due string, category string) (int64, error) {
+func CreateTodoItem(conn *sqlx.DB, userId int, text string, due time.Time, category string) (int64, error) {
 	sql, args, err := squirrel.Insert("todo_item").
 		Columns("user_id", "text", "string", "category").
 		Values(userId, text, due, category).
