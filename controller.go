@@ -25,6 +25,10 @@ func GetUserByUsername(conn *sqlx.DB, username string) (User, error) {
 		return User{}, err
 	}
 
+	if len(user) == 0 {
+		return User{}, err
+	}
+
 	return user[0], nil
 }
 
