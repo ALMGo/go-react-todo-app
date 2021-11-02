@@ -16,12 +16,6 @@ import (
 
 var logger *zap.Logger
 
-func handleSuccess(c *fiber.Ctx) error {
-	return c.JSON(&Message{
-		message: "success",
-	})
-}
-
 func main() {
 	db, err := sqlx.Connect("sqlite3", "test.db")
 	store := session.New()
